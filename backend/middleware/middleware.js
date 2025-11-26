@@ -1,37 +1,26 @@
-import jwt from 'jsonwebtoken'
-import 'dotenv/config'
+import jwt from 'jsonwebtoken';
+import 'dotenv/config'; 
 
 const authenticateToken = (req, res, next) => {
-    const btoken = req.headers['authorization']
-    console.log('btoken', btoken)
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; 
 
-    if (!btoken) {
-        return res.status(401).json({ message: 'No token provided' })
-    }
+    if (!token) return res.status(401).json({ message: 'No token provided' });
 
-    const token = btoken.trim().replace(/^bearer\s+/i, '');
-    console.log('token', token)
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) return res.status(403).json({ message: 'Invalid token' });
+        req.user = user; 
+        next();
+    });
+};
 
-    try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = verified;
-        return true;
-    } catch (error) {
-        return res.status(401).json({ message: 'Invalid token' })
-    }
-}
-
-const authorizeRole = (allowdRoles) => {
-    return (req, res, next)=>{
-        const userRole = req.user.role 
-        if(!allowdRoles.includes(userRole)){
-            return res.status(403).json({message: 'You are not authorized to access this route'})
+const authorizeRole = (allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Access denied. Unauthorized role.' });
         }
-        next()
-    }
-}
+        next();
+    };
+};
 
-export {
-    authenticateToken,
-    authorizeRole
-}
+export { authenticateToken, authorizeRole }; 

@@ -1,0 +1,533 @@
+// server
+import express, { Router } from 'express';
+import dotenv from 'dotenv';
+import connectDB from './db/dbConfig.js';
+import authRouter from './routes/authRoutes.js';
+import taskRouter from './routes/taskRoutes.js';
+import userRouter from './routes/userRoutes.js';
+dotenv.config();
+connectDB()
+const port = process.env.PORT || 3000;
+const app = express();
+app.use(express.json())
+
+app.use('/api/auth', authRouter)
+app.use('/api/user', userRouter)
+app.use('/api/task', taskRouter)
+
+app.get('/', (req, res) => {
+  res.send('Hello World!');
+});
+
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
+
+//auth route 
+
+import { Router } from 'express';
+import { loginUser, registerUser, logoutUser } from '../controller/authController.js';
+import { validateUserBody } from '../model/userModel.js';
+const authRouter = Router();
+
+authRouter.post('/register', validateUserBody, registerUser);
+authRouter.post('/login', loginUser);
+authRouter.post('/logout', logoutUser);
+
+export default authRouter;
+
+// user router
+import { Router } from 'express';
+import { createTask, getTask, updateTask, deleteTask } from '../controller/taskController.js';
+
+const taskRouter = Router();
+
+taskRouter.post('/create', createTask);
+taskRouter.get('/get', getTask);
+taskRouter.put('/update', updateTask);
+taskRouter.delete('/delete', deleteTask);   
+
+export default taskRouter;
+
+// task router
+
+import { Router } from 'express';
+import { createTask, getTask, updateTask, deleteTask } from '../controller/taskController.js';
+
+const taskRouter = Router();
+
+taskRouter.post('/create', createTask);
+taskRouter.get('/get', getTask);
+taskRouter.put('/update', updateTask);
+taskRouter.delete('/delete', deleteTask);   
+
+export default taskRouter;
+
+
+// auth controller
+import { loginService, registerService, logoutService } from '../service/authService.js';
+
+const loginUser = async (req, res) => {
+    try {
+        const userLogin = await loginService(req, res);
+        res.status(200).json(userLogin);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const registerUser = async (req, res) => {
+    try {
+        const userRegister = await registerService(req, res);
+        res.send(userRegister);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const logoutUser = async (req, res) => {
+    try {
+        const userLogout = await logoutService(req, res);
+        res.status(200).json(userLogout);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+export {
+    loginUser,
+    registerUser,
+    logoutUser
+}
+// task controller
+import { createTaskService, getTaskService, updateTaskService, deleteTaskService } from '../service/taskService.js';
+import { authenticateToken, authorizeRole } from '../middleware/middleware.js';
+const createTask = async (req, res) => {
+    try {
+        const task = await createTaskService(req, res);
+        res.status(201).json(task);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const getTask = async (req, res) => {
+    try {
+        const task = await getTaskService(req, res);
+        res.status(200).json(task);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const updateTask = async (req, res) => {
+
+    try {
+        const authenticate = authenticateToken(req, res)
+        if(!authenticate){
+            return res.status(401).json({message: 'Unauthorized'})
+        }
+        const task = await updateTaskService(req, res);
+        res.json(task);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const deleteTask = async (req, res) => {
+    try {
+        const task = await deleteTaskService(req, res);
+        res.status(200).json(task);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+export {
+    createTask,
+    getTask,
+    updateTask,
+    deleteTask
+}   
+
+// user controller
+import { getUserService, getAllUserService } from '../service/userService.js';
+import { authenticateToken, authorizeRole } from '../middleware/middleware.js';
+
+const getUser = async (req, res) => {
+    try {
+        const authenticate = authenticateToken(req, res)
+        if(!authenticate){
+            return res.status(401).json({message: 'Unauthorized'})
+        }
+        const user = await getUserService(req, res);
+        res.send(user);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const getAllUser = async (req, res) => {
+    try {
+        const authenticate = authenticateToken(req, res)
+        if(!authenticate){
+            return res.status(401).json({message: 'Unauthorized'})
+        }
+        const authorizedRole = authorizeRole(['admin', 'user'])
+        if(!authorizedRole){
+            return res.status(403).json({message: 'Unauthorized'})
+        }
+        const user = await getAllUserService(req, res);
+        res.status(200).json(user);
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+export {
+    getUser,
+    getAllUser
+}
+
+// middleware
+
+import jwt from 'jsonwebtoken'
+import 'dotenv/config'
+
+const authenticateToken = (req, res, next) => {
+    const btoken = req.headers['authorization']
+    console.log('btoken', btoken)
+
+    if (!btoken) {
+        return res.status(401).json({ message: 'No token provided' })
+    }
+
+    const token = btoken.trim().replace(/^bearer\s+/i, '');
+    console.log('token', token)
+
+    try {
+        const verified = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = verified;
+        return true;
+    } catch (error) {
+        return res.status(401).json({ message: 'Invalid token' })
+    }
+}
+
+const authorizeRole = (allowdRoles) => {
+    return (req, res, next)=>{
+        const userRole = req.user.role 
+        if(!allowdRoles.includes(userRole)){
+            return res.status(403).json({message: 'You are not authorized to access this route'})
+        }
+        next()
+    }
+}
+
+export {
+    authenticateToken,
+    authorizeRole
+}
+
+// helper
+import jwt from 'jsonwebtoken';
+import 'dotenv/config'
+
+
+export const getUserId = (req) => {
+    const token = req.headers['authorization'] || req.headers['Authorization'];
+    const trimmedToken = token.trim().replace(/^Bearer\s+/i, '');
+    const decode = jwt.verify(trimmedToken, process.env.JWT_SECRET);
+    const userId = decode.id;
+    return userId
+}
+
+// userModel
+import mongoose from "mongoose";
+
+const userSchema = new mongoose.Schema({
+    userName: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true }, 
+    role: { type: String, enum : ['admin', 'user'], required: true },
+    tasks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'task' }],
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+const userModel = mongoose.model('user', userSchema);
+
+export default userModel;
+
+export const validateUserBody = (req, res, next) => {
+    const {userName, email, password, role} = req.body;
+    if (!userName || !email || !password || !role) {
+        return res.status(400).json({message: 'Missing required fields: userName, email, password, or role'});
+    }
+    next();   
+}
+// task model 
+
+import mongoose from "mongoose";
+
+const taskScheman  = new mongoose.Schema({
+    taskName: { type: String, required: true },
+    description: { type: String, required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user', required: true },
+    isDeleted: { type: Boolean, default: false },
+    updateCount: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+const taskModel = mongoose.model("task", taskScheman);
+
+export default taskModel;
+
+
+// user service
+import userModel from "../model/userModel.js";
+import { getUserId } from "../helper/helper.js";
+
+const getUserService = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        console.log("userId", userId);
+    
+        // if (!userId) {
+        //     return res.status(400).json({ message: 'User not found' });
+        // }
+
+        const user = await userModel.findOne({ _id: userId});
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+        return user;
+
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const getAllUserService = async (req, res) => {
+    try {
+        const user = await userModel.find({ isDeleted: false });
+        if (!user) {
+            return res.status(400).json({ message: 'No users found' });
+        }
+        return res.status(200).json({ message: "Users retrieved successfully", user });
+
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+export {
+    getUserService,
+    getAllUserService
+} 
+
+// task service
+import taskModel from "../model/taskModel.js";
+import { getUserId } from "../helper/helper.js";
+import userModel from "../model/userModel.js";
+const createTaskService = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        if (!userId) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+        const { taskName, description } = req.body;
+
+        let task = await taskModel.findOne({ taskName });
+        if (task) {
+            return res.status(400).json({ message: 'Task already exists' });
+        }
+
+        task = new taskModel({
+            taskName: taskName,
+            description: description,
+            userId: userId
+        });
+
+        task = await task.save();
+
+        userModel.findOneAndUpdate(task.userId, { $inc: { taskCount: 1 } });
+
+        if (!task) {
+            return res.status(400).json({ message: 'Error creating task' });
+        }
+        return res.status(201).json({ message: "Task Created Successfully", task });
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const getTaskService = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        if (!userId) {
+            return res.status(400).send({ message: 'User not found' });
+        }
+        const task = await taskModel.find({ userId: userId, isDeleted: false });
+        if (!task) {
+            return res.status(400).json({ message: 'No tasks found' });
+        }
+        return res.status(200).json({ message: "Task retrieved successfully", task });
+
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const updateTaskService = async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        if (!userId) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        const taskId = req.query.taskId;
+        const { taskName, description } = req.body;
+
+        const task = await taskModel.findOne({ _id: taskId, isDeleted: false}); 
+
+        if (!task) {
+            return res.status(400).send({ message: 'Task not found' });
+        }
+
+        task.taskName = taskName;
+        task.description = description;
+        task.updateCount++;
+        task = await task.save();
+
+        console.log(task)
+
+        if (!task) {
+            return res.status(400).json({ message: 'Error updating task' });
+        }
+        return res.status(200).json({ message: "Task updated successfully", task });
+
+       
+    } catch (error) {
+        res.status(400).json(error);
+    }
+
+}
+
+const deleteTaskService = async (req, res) => {
+    try {   
+        const userId = getUserId(req);
+        if (!userId) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+        const task = await taskModel.findOne({ taskName: req.body.taskName, userId: userId });
+        if (!task) {
+            return res.status(400).json({ message: 'Task not found' });
+        }
+        task.isDeleted = true;
+        task = await task.save();
+        if (!task) {
+            return res.status(400).json({ message: 'Error deleting task' });
+        }
+        return res.status(200).json({ message: "Task deleted successfully", task });
+
+    } catch (error) {
+
+    }
+}
+
+export {
+    createTaskService,
+    getTaskService,
+    updateTaskService,
+    deleteTaskService
+}
+
+// task service
+import userModel from "../model/userModel.js";
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import 'dotenv/config'
+
+const loginService = async (req, res) => {
+    try {
+        let user = await userModel.findOne({ email: req.body.email });
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+        const isPasswordMatch = await bcrypt.compare(req.body.password, user.password);
+
+        if (!isPasswordMatch) {
+            return res.status(400).json({ message: 'Invalid password' });
+        }
+        const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+        res.json({ token })
+
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const registerService = async (req, res) => {
+    try {
+        const { userName, email, password, role } = req.body;
+
+        let user = await userModel.findOne({ email });
+        if (user) {
+            return res.status(400).json({ message: 'User already exists' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        user = new userModel({
+            userName: userName,
+            email: email,
+            password: hashedPassword,
+            role: role
+        });
+
+        user = await user.save();
+        if (!user) {
+            return res.status(400).json({ message: 'Error creating user' });
+        }
+
+        user.password = undefined;
+        res.status(201).json({ message: "User Created Successfully", user });
+    } catch (error) {
+        res.status(400).json(error);
+    }
+}
+
+const logoutService = async (req, res) => {
+    try {
+        res.json({ message: "User logged out successfully" });
+    }
+    catch (error) {
+        res.send(error.message);
+    }
+}
+export {
+    loginService,
+    registerService,
+    logoutService
+};
+
+
+// db config
+import mongoose from 'mongoose';
+
+const connectDB = async () => {
+    try {
+        await mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            useCreateIndex: true,
+            useFindAndModify: false
+        });
+        console.log('MongoDB connected successfully');
+    } catch (error) {
+        console.log(error);
+    }
+}
