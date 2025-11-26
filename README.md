@@ -76,6 +76,8 @@ This application allows users to manage tasks and administrators to view system 
 
 ## API Endpoints
 
+* Postman Collection : https://www.postman.com/shantanu-kharade-9272208/workspace/shantanu-kharade-public/collection/49074979-67736391-0c48-4644-9268-24d1b244e6a8?action=share&creator=49074979
+
 ### Auth
 * `POST /api/auth/register` - Register a new user (Role: 'user' or 'admin').
 * `POST /api/auth/login` - Login and receive JWT.
